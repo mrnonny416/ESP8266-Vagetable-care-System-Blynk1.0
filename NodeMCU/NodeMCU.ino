@@ -5,6 +5,8 @@
 #include <WidgetRTC.h>
 #include "./env.h"
 #define BLYNK_PRINT Serial
+#include <NTPClient.h>  //https://randomnerdtutorials.com/esp8266-nodemcu-date-time-ntp-client-server-arduino/
+#include <WiFiUdp.h>
 // You should get Auth Token in the Blynk App.
 // Go to the Project Settings (nut icon).
 char auth[] = AUTHENTICAION_TOKEN;
@@ -17,7 +19,6 @@ char server[] = SERVER_URL;
 int port = SERVER_PORT;
 
 
-WidgetTerminal terminal(V0);
 BlynkTimer timer;
 WidgetRTC rtc;
 
@@ -49,6 +50,10 @@ bool manual[8];  //global
 static unsigned long last_display_time = 0;
 
 int virtual_port[8] = { 11, 12, 13, 14, 15, 16, 17, 18 };
+
+// Code Timer-----------------
+WiFiUDP ntpUDP;
+NTPClient timeClient(ntpUDP, "pool.ntp.org");
 
 void setup() {
   // Debug console
@@ -88,33 +93,36 @@ void setup() {
 
   Blynk.begin(auth, ssid, pass, server, port);  // ใช้เป็น Server Blynk ฟรี
 
-  setSyncInterval(10 * 60);  // Sync interval in seconds (10 minutes)
+  // timer-----------------------------
+  timeClient.begin();
+  timeClient.setTimeOffset(25200);
 
-  // Display digital clock every 10 seconds
-  timer.setInterval(10000, clockDisplay);
 }
 
 void loop() {
   Blynk.run();
   timer.run();
-  if (millis() - last_display_time >= 10000) {  // check if 10 seconds have elapsed
-    Serial.println(String("Now : ") + currentTime);
+  if (millis() - last_display_time >= 5000) {  // check if 1 seconds have elapsed
+  clockDisplay();
+    
     if (timer_manual) {
       for (int i = 0; i < 8; i++) {
         if (Timer[i] != NULL and Timer[i]->isWeekdaySelected(weekly[weekday()])) {
-          Serial.println(String("Time Start : ") + Timer[i]->getStartHour() + ":" + Timer[i]->getStartMinute());
-          if (Timer[i]->hasStartTime() and Timer[i]->getStartHour() <= hour() and Timer[i]->getStartMinute() <= minute()) {
+          Serial.println(String("Time Start : ") + Timer[i]->getStartHour() + ":" + Timer[i]->getStartMinute() + "-" + Timer[i]->getStopHour() + ":" + Timer[i]->getStopMinute());
+          if (Timer[i]->hasStartTime() and Timer[i]->getStartHour() <= timeClient.getHours() and Timer[i]->getStartMinute() <= timeClient.getMinutes()) {
+            Serial.print(" start in time working");
             manual[i] = true;
-          } else if (Timer[i]->isStartSunrise() and hour() == 6) {  // Use '==' instead of '='
+          } else if (Timer[i]->isStartSunrise() and timeClient.getHours() == 6) {  // Use '==' instead of '='
             manual[i] = true;
-          } else if (Timer[i]->isStartSunset() and hour() == 18) {  // Use '==' instead of '='
+          } else if (Timer[i]->isStartSunset() and timeClient.getHours() == 18) {  // Use '==' instead of '='
             manual[i] = true;
           }
-          if (Timer[i]->hasStopTime() and Timer[i]->getStopHour() >= hour() and Timer[i]->getStopMinute() >= minute()) {
+          if (Timer[i]->hasStopTime() and Timer[i]->getStopHour() <= timeClient.getHours() and Timer[i]->getStopMinute() <= timeClient.getMinutes()) {
+            Serial.print(" ---- > end in time working");
             manual[i] = false;
-          } else if (Timer[i]->isStopSunrise() and hour() == 6) {  // Use '==' instead of '='
+          } else if (Timer[i]->isStopSunrise() and timeClient.getHours() == 6) {  // Use '==' instead of '='
             manual[i] = false;
-          } else if (Timer[i]->isStopSunset() and hour() == 18) {  // Use '==' instead of '='
+          } else if (Timer[i]->isStopSunset() and timeClient.getHours() == 18) {  // Use '==' instead of '='
             manual[i] = false;
           }
           Serial.println(manual[i] ? String(i + 1) + String(" : on") : String(i + 1) + String(" : off"));
@@ -149,35 +157,14 @@ BLYNK_WRITE(V0) {
 
 //-----------Real Time Clock-----------
 void clockDisplay() {
-  currentTime = String(hour()) + ":" + minute() + ":" + second();
-  currentDate = String(day()) + " " + month() + " " + year() + " ";  //+weekday();//sunday = 1 satuaday = 7
+  currentTime = String(timeClient.getHours()) + ":" + timeClient.getMinutes() + ":" + timeClient.getSeconds();
+  Serial.println(String("Now : ") + currentTime);
 }
 
 BLYNK_CONNECTED() {
   // Synchronize time on connection
   rtc.begin();
 }
-//-----------Timer Set 1--------
-//Timer[0].hasStartTime()
-//Timer[0].getStartHour()
-//Timer[0].getStartMinute()
-//Timer[0].getStartSecond()
-//Timer[0].isStartSunrise()
-//Timer[0].isStartSunset()
-
-//Timer[0].hasStopTime()
-//Timer[0].getStopHour()
-//Timer[0].getStopMinute()
-//Timer[0].getStopSecond()
-//Timer[0].isStopSunrise()
-//Timer[0].isStopSunset()
-
-//Timer[0].getTZ()
-//Timer[0].getTZ_Offset()
-
-//Timer[0].isWeekdaySelected(i)
-
-
 
 BLYNK_WRITE(V1) {
   if (Timer[0] != NULL)
@@ -227,14 +214,14 @@ BLYNK_WRITE(V10) {
       {
         timer_manual = true;
         Serial.println("Item 1 Selected");
-        Blynk.setProperty(V1, "color", "#09FFA2");
-        Blynk.setProperty(V2, "color", "#09FFA2");
-        Blynk.setProperty(V3, "color", "#09FFA2");
-        Blynk.setProperty(V4, "color", "#09FFA2");
-        Blynk.setProperty(V5, "color", "#09FFA2");
-        Blynk.setProperty(V6, "color", "#09FFA2");
-        Blynk.setProperty(V7, "color", "#09FFA2");
-        Blynk.setProperty(V8, "color", "#09FFA2");
+        Blynk.setProperty(V1, "color", "#FF8C09");
+        Blynk.setProperty(V2, "color", "#FF8C09");
+        Blynk.setProperty(V3, "color", "#7D7D7D");
+        Blynk.setProperty(V4, "color", "#7D7D7D");
+        Blynk.setProperty(V5, "color", "#09C3FF");
+        Blynk.setProperty(V6, "color", "#09C3FF");
+        Blynk.setProperty(V7, "color", "#09C3FF");
+        Blynk.setProperty(V8, "color", "#09C3FF");
         Blynk.setProperty(V11, "color", "#7D7D7D");
         Blynk.setProperty(V12, "color", "#7D7D7D");
         Blynk.setProperty(V13, "color", "#7D7D7D");
