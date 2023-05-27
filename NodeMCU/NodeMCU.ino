@@ -25,7 +25,7 @@ WidgetRTC rtc;
 String currentTime;
 String currentDate;
 
-const int weekly[8] = { 0, 7, 1, 2, 3, 4, 5, 6 };
+const int weekly[8] = { 7, 1, 2, 3, 4, 5, 6 };
 //sunday = 7 saturnday = 6
 
 // Define light Port
@@ -96,64 +96,69 @@ void setup() {
   // timer-----------------------------
   timeClient.begin();
   timeClient.setTimeOffset(25200);
-
 }
 
 void loop() {
   Blynk.run();
   timer.run();
+  timeClient.update();
   if (millis() - last_display_time >= 5000) {  // check if 1 seconds have elapsed
-  clockDisplay();
-    
+    clockDisplay();
+
     if (timer_manual) {
       for (int i = 0; i < 8; i++) {
+        for (int j = 1; j <= 7; j++) {
+          if (Timer[i] != NULL and Timer[i]->isWeekdaySelected(j)) {
+            Serial.println(String("Day ") + j + " is selected");
+          }
+        }
+        // weekly[7] = { 7, 1, 2, 3, 4, 5, 6 };
+        // friday weekday = 0
         if (Timer[i] != NULL and Timer[i]->isWeekdaySelected(weekly[weekday()])) {
           Serial.println(String("Time Start : ") + Timer[i]->getStartHour() + ":" + Timer[i]->getStartMinute() + "-" + Timer[i]->getStopHour() + ":" + Timer[i]->getStopMinute());
           if (Timer[i]->hasStartTime() and Timer[i]->getStartHour() <= timeClient.getHours() and Timer[i]->getStartMinute() <= timeClient.getMinutes()) {
             Serial.print(" start in time working");
             manual[i] = true;
-          } else if (Timer[i]->isStartSunrise() and timeClient.getHours() == 6) {  // Use '==' instead of '='
-            manual[i] = true;
-          } else if (Timer[i]->isStartSunset() and timeClient.getHours() == 18) {  // Use '==' instead of '='
-            manual[i] = true;
+          } else {
+            Serial.print(" not in time");
+            manual[i] = false;
           }
           if (Timer[i]->hasStopTime() and Timer[i]->getStopHour() <= timeClient.getHours() and Timer[i]->getStopMinute() <= timeClient.getMinutes()) {
             Serial.print(" ---- > end in time working");
-            manual[i] = false;
-          } else if (Timer[i]->isStopSunrise() and timeClient.getHours() == 6) {  // Use '==' instead of '='
-            manual[i] = false;
-          } else if (Timer[i]->isStopSunset() and timeClient.getHours() == 18) {  // Use '==' instead of '='
             manual[i] = false;
           }
           Serial.println(manual[i] ? String(i + 1) + String(" : on") : String(i + 1) + String(" : off"));
           Blynk.virtualWrite(virtual_port[i], manual[i]);
         }
       }
-
-
+      digitalWrite(light1, !manual[0]);
+      digitalWrite(light2, !manual[1]);
+      digitalWrite(light3, !manual[2]);
+      digitalWrite(light4, !manual[3]);
+      digitalWrite(water1, !manual[4]);
+      digitalWrite(water2, !manual[5]);
+      digitalWrite(water3, !manual[6]);
+      digitalWrite(water4, !manual[7]);
     } else {
-      digitalWrite(light1, manual[0]);
-      digitalWrite(light2, manual[1]);
-      digitalWrite(light3, manual[2]);
-      digitalWrite(light4, manual[3]);
-      digitalWrite(water1, manual[4]);
-      digitalWrite(water2, manual[5]);
-      digitalWrite(water3, manual[6]);
-      digitalWrite(water4, manual[7]);
+      digitalWrite(light1, !manual[0]);
+      digitalWrite(light2, !manual[1]);
+      digitalWrite(light3, !manual[2]);
+      digitalWrite(light4, !manual[3]);
+      digitalWrite(water1, !manual[4]);
+      digitalWrite(water2, !manual[5]);
+      digitalWrite(water3, !manual[6]);
+      digitalWrite(water4, !manual[7]);
     }
 
     int val = analogRead(humidity);
     Blynk.virtualWrite(V0, 1024 - val);
     Serial.println(1024 - val);
-    Blynk.setProperty(V0, "color", val > 256 and val < 768 ? "#09D6FF" : "#FFAD09");
+    Blynk.setProperty(V0, "color", val > 500 and val < 710 ? "#09D6FF" : "#FFAD09");  //50%~69% good for plate
 
     last_display_time = millis();  // update last_display_time to current time
   }
 }
 
-//----------Terminal-----------
-BLYNK_WRITE(V0) {
-}
 
 //-----------Real Time Clock-----------
 void clockDisplay() {
@@ -262,7 +267,6 @@ BLYNK_WRITE(V11) {
   if (param.asInt() == 1) {
     Serial.print("Light 1 : On");
     manual[0] = true;
-    Blynk.virtualWrite(V0, "add", 1, "UpdatedName", "UpdatedValue");
   } else {
     Serial.print("Light 1 : Off");
     manual[0] = false;
@@ -272,7 +276,6 @@ BLYNK_WRITE(V11) {
 BLYNK_WRITE(V12) {
   if (param.asInt() == 1) {
     Serial.print("Light 2 : On");
-    Blynk.virtualWrite(V0, "add", 2, "UpdatedName", "UpdatedValue");
     manual[1] = true;
   } else {
     Serial.print("Light 2 : Off");
